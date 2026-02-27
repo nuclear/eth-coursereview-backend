@@ -325,12 +325,20 @@ func main() {
 			Semester     string `json:"semester"`
 			Review       string `json:"review"`
 			UniqueId     string `json:"randomString"`
+			Token        string `json:"token"`
 		}
 		var data payload
 		if err := c.BodyParser(&data); err != nil {
 			return c.Status(400).JSON(fiber.Map{"error": "Cannot parse JSON"})
 		}
+
+		// Use JWT unique_id if a valid token is present, otherwise fall back to noAuth
 		uniqueId := data.UniqueId + "noAuth"
+		if data.Token != "" {
+			if user, err := DecodeJWT(data.Token); err == nil {
+				uniqueId = user.UniqueID
+			}
+		}
 
 		_, err = db.GetUser(c.Context(), uniqueId)
 		if err != nil {
