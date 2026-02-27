@@ -165,6 +165,10 @@ func main() {
 
 	db := sql.New(pool)
 
+	// OAuth routes
+	app.Get("/oauth/login", oauthLoginHandler)
+	app.Get("/oauth/callback", oauthCallbackHandler)
+
 	// Testing endpoint
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"Playing with": "Duckies"})
@@ -352,6 +356,11 @@ func main() {
 			}
 		}
 
+		// Moderation check before saving
+		if modErr := checkModeration(c, data.Review); modErr != nil {
+			return modErr
+		}
+
 		err = reviewChange(c, db, id, data.Review)
 		if err != nil {
 			return err
@@ -373,6 +382,11 @@ func main() {
 		_, err := db.CheckUserWithId(c.Context(), sql.CheckUserWithIdParams{EvaluationID: data.Id, UserID: uniqueId})
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+		}
+
+		// Moderation check before saving
+		if modErr := checkModeration(c, data.Review); modErr != nil {
+			return modErr
 		}
 
 		return reviewChange(c, db, data.Id, data.Review)
