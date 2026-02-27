@@ -186,16 +186,18 @@ func oauthCallbackHandler(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch user info"})
 	}
 
-	// Log raw userinfo response for debugging
-	log.Printf("OAuth: raw userinfo response: %s", string(userBody))
-
-	var userInfo userInfoResponse
-	if err := json.Unmarshal(userBody, &userInfo); err != nil {
-		log.Printf("OAuth: failed to parse userinfo response: %v", err)
+	// UniClubs wraps responses in { success: true, data: { ... } }
+	var wrapper struct {
+		Success bool             `json:"success"`
+		Data    userInfoResponse `json:"data"`
+	}
+	if err := json.Unmarshal(userBody, &wrapper); err != nil {
+		log.Printf("OAuth: failed to parse userinfo response: %v, body: %s", err, string(userBody))
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to parse user info"})
 	}
 
-	log.Printf("OAuth: parsed userinfo: sub=%q is_student=%v student_verified=%v", userInfo.Sub, userInfo.IsStudent, userInfo.StudentVerified)
+	userInfo := wrapper.Data
+	log.Printf("OAuth: userinfo: sub=%q is_student=%v student_verified=%v", userInfo.Sub, userInfo.IsStudent, userInfo.StudentVerified)
 
 	// Determine student status from student:verify scope
 	isStudent := userInfo.IsStudent && userInfo.StudentVerified
