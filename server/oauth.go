@@ -50,15 +50,16 @@ func oauthLoginHandler(c *fiber.Ctx) error {
 	// The origin query param tells us where to redirect the user after login
 	origin := c.Query("origin", "/")
 
-	// Build the state parameter: encodes the frontend callback URL and origin
+	// Build the state parameter: encodes the origin path
+	// UniClubs requires state to be at least 8 characters
 	callbackURL := cfg.BackendURL + "/oauth/callback"
-	state := base64.RawURLEncoding.EncodeToString([]byte(origin))
+	state := base64.RawURLEncoding.EncodeToString([]byte("origin:" + origin))
 
 	authURL := fmt.Sprintf("%s/api/oauth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s",
 		cfg.ProviderURL,
 		url.QueryEscape(cfg.ClientID),
 		url.QueryEscape(callbackURL),
-		url.QueryEscape("openid profile email"),
+		url.QueryEscape("openid student:verify"),
 		url.QueryEscape(state),
 	)
 
@@ -73,13 +74,21 @@ type tokenResponse struct {
 	IDToken     string `json:"id_token"`
 }
 
-// userInfoResponse represents the response from the OAuth userinfo endpoint.
+// userInfoResponse represents the response from the UniClubs userinfo endpoint.
+// With scopes "openid student:verify", we get sub + student verification fields.
 type userInfoResponse struct {
-	Sub           string `json:"sub"`
-	Email         string `json:"email"`
-	EmailVerified bool   `json:"email_verified"`
-	EmailUni      string `json:"email_uni"`
-	Name          string `json:"name"`
+	Sub             string          `json:"sub"`
+	IsStudent       bool            `json:"is_student"`
+	StudentVerified bool            `json:"student_verified"`
+	University      *universityInfo `json:"university"`
+	GraduationYear  *int            `json:"graduation_year"`
+	Major           *string         `json:"major"`
+}
+
+type universityInfo struct {
+	Name      string `json:"name"`
+	ShortName string `json:"short_name"`
+	Slug      string `json:"slug"`
 }
 
 // oauthCallbackHandler handles the OAuth callback, exchanges the code for a token,
@@ -97,7 +106,12 @@ func oauthCallbackHandler(c *fiber.Ctx) error {
 	if stateParam != "" {
 		decoded, err := base64.RawURLEncoding.DecodeString(stateParam)
 		if err == nil {
-			origin = string(decoded)
+			s := string(decoded)
+			if strings.HasPrefix(s, "origin:") {
+				origin = strings.TrimPrefix(s, "origin:")
+			} else {
+				origin = s
+			}
 		}
 	}
 
@@ -178,8 +192,8 @@ func oauthCallbackHandler(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to parse user info"})
 	}
 
-	// Determine student status: user has a verified university email
-	isStudent := userInfo.EmailUni != "" && userInfo.EmailVerified
+	// Determine student status from student:verify scope
+	isStudent := userInfo.IsStudent && userInfo.StudentVerified
 
 	// Sign a CourseReview JWT with the same format DecodeJWT() expects
 	jwt, err := SignJWT(userInfo.Sub, isStudent)
