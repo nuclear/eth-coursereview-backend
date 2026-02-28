@@ -58,7 +58,7 @@ func moderateReview(reviewText string) moderationResult {
 
 	model := os.Getenv("LLM_MODEL")
 	if model == "" {
-		model = "anthropic/claude-haiku-4-5-20251001"
+		model = "anthropic/claude-haiku-4.5"
 	}
 
 	baseURL := os.Getenv("LLM_BASE_URL")
