@@ -359,7 +359,7 @@ func main() {
 				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 			}
 		} else {
-			_, err = db.UpdateSemester(c.Context(), sql.UpdateSemesterParams{EvaluationID: id, Semester: pgtype.Text{String: data.Semester, Valid: true}})
+			_, err = db.UpdateSemester(c.Context(), sql.UpdateSemesterParams{EvaluationID: id, Semester: pgtype.Text{String: data.Semester, Valid: true}, UserID: uniqueId})
 			if err != nil {
 				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 			}
