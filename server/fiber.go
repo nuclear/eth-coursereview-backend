@@ -365,11 +365,12 @@ func main() {
 		}
 
 		// Moderation check before saving
-		if modErr := checkModeration(c, data.Review); modErr != nil {
+		modResult, modErr := checkModeration(c, data.Review)
+		if modErr != nil {
 			return modErr
 		}
 
-		err = reviewChange(c, db, id, data.Review)
+		err = reviewChange(c, db, id, data.Review, modResult)
 		if err != nil {
 			return err
 		}
@@ -393,11 +394,12 @@ func main() {
 		}
 
 		// Moderation check before saving
-		if modErr := checkModeration(c, data.Review); modErr != nil {
+		modResult, modErr := checkModeration(c, data.Review)
+		if modErr != nil {
 			return modErr
 		}
 
-		return reviewChange(c, db, data.Id, data.Review)
+		return reviewChange(c, db, data.Id, data.Review, modResult)
 	})
 
 	auth.Post("/deleteRating", func(c *fiber.Ctx) error {
@@ -704,12 +706,33 @@ func main() {
 	log.Fatal(app.Listen(":3000"))
 }
 
-func reviewChange(c *fiber.Ctx, db *sql.Queries, evalId int32, review string) error {
+func reviewChange(c *fiber.Ctx, db *sql.Queries, evalId int32, review string, modResult moderationResult) error {
 	review = strings.TrimSpace(review)
 	if review == "" {
 		return c.Status(500).JSON(fiber.Map{"error": "Review cannot be empty"})
 	}
-	SendDiscordMessage("Review to review: https://coursereview.ch/admin", "", 16712959)
+
+	// Build Discord notification with AI verdict
+	aiVerdict := "APPROVED"
+	if !modResult.Approved {
+		aiVerdict = "BLOCKED: " + modResult.Reason
+	}
+	snippet := review
+	if len(snippet) > 200 {
+		snippet = snippet[:200] + "..."
+	}
+
+	autoApprove := strings.EqualFold(os.Getenv("LLM_AUTO_APPROVE"), "true")
+
+	discordTitle := "Review to review"
+	discordColor := 16712959 // orange
+	if autoApprove {
+		discordTitle = "Review auto-approved by AI"
+		discordColor = 1651554 // green
+	}
+	discordDesc := fmt.Sprintf("**AI:** %s\n**Review:** %s\nhttps://coursereview.ch/admin", aiVerdict, snippet)
+	SendDiscordMessage(discordTitle, discordDesc, discordColor)
+
 	//check if eval id exists in review table
 	//if it doesn't, insert
 	//if it does, update
@@ -726,6 +749,15 @@ func reviewChange(c *fiber.Ctx, db *sql.Queries, evalId int32, review string) er
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
 	}
+
+	// Auto-approve if toggle is on and AI approved
+	if autoApprove && modResult.Approved {
+		_, err = db.VerifyReview(c.Context(), evalId)
+		if err != nil {
+			log.Printf("Auto-approve failed for eval %d: %v", evalId, err)
+		}
+	}
+
 	return c.JSON(fiber.Map{"success": "Set review"})
 }
 

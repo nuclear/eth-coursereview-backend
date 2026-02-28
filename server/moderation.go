@@ -153,16 +153,17 @@ func parseModerationJSON(text string) moderationResult {
 	return result
 }
 
-// checkModeration runs moderation and returns a Fiber error response if blocked, or nil if approved.
-func checkModeration(c *fiber.Ctx, reviewText string) error {
+// checkModeration runs moderation and returns the result plus a Fiber error response if blocked.
+// Returns (result, nil) if approved, (result, error) if blocked.
+func checkModeration(c *fiber.Ctx, reviewText string) (moderationResult, error) {
 	result := moderateReview(reviewText)
 	if !result.Approved {
-		return c.Status(422).JSON(fiber.Map{
+		return result, c.Status(422).JSON(fiber.Map{
 			"error":      "review_blocked",
 			"reason":     result.Reason,
 			"moderation": true,
 		})
 	}
-	return nil
+	return result, nil
 }
 
