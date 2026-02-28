@@ -366,12 +366,17 @@ func main() {
 		}
 
 		// Moderation check before saving
-		modResult, modErr := checkModeration(c, data.Review)
-		if modErr != nil {
-			return modErr
+		modResult := moderateReview(data.Review)
+		if !modResult.Approved {
+			taintedUsers.Store(uniqueId, true)
+			return c.Status(422).JSON(fiber.Map{
+				"error":      "review_blocked",
+				"reason":     modResult.Reason,
+				"moderation": true,
+			})
 		}
 
-		err = reviewChange(c, db, id, data.Review, modResult)
+		err = reviewChange(c, db, id, data.Review, modResult, uniqueId)
 		if err != nil {
 			return err
 		}
@@ -395,12 +400,17 @@ func main() {
 		}
 
 		// Moderation check before saving
-		modResult, modErr := checkModeration(c, data.Review)
-		if modErr != nil {
-			return modErr
+		modResult := moderateReview(data.Review)
+		if !modResult.Approved {
+			taintedUsers.Store(uniqueId, true)
+			return c.Status(422).JSON(fiber.Map{
+				"error":      "review_blocked",
+				"reason":     modResult.Reason,
+				"moderation": true,
+			})
 		}
 
-		return reviewChange(c, db, data.Id, data.Review, modResult)
+		return reviewChange(c, db, data.Id, data.Review, modResult, uniqueId)
 	})
 
 	auth.Post("/deleteRating", func(c *fiber.Ctx) error {
@@ -707,31 +717,31 @@ func main() {
 	log.Fatal(app.Listen(":3000"))
 }
 
-func reviewChange(c *fiber.Ctx, db *sql.Queries, evalId int32, review string, modResult moderationResult) error {
+func reviewChange(c *fiber.Ctx, db *sql.Queries, evalId int32, review string, modResult moderationResult, userId string) error {
 	review = strings.TrimSpace(review)
 	if review == "" {
 		return c.Status(500).JSON(fiber.Map{"error": "Review cannot be empty"})
 	}
 
 	// Build Discord notification with AI verdict
-	aiVerdict := "APPROVED"
-	if !modResult.Approved {
-		aiVerdict = "BLOCKED: " + modResult.Reason
-	}
 	snippet := review
 	if len(snippet) > 200 {
 		snippet = snippet[:200] + "..."
 	}
 
 	autoApprove := strings.EqualFold(os.Getenv("LLM_AUTO_APPROVE"), "true")
+	_, wasTainted := taintedUsers.Load(userId)
 
 	discordTitle := "Review to review"
 	discordColor := 16712959 // orange
-	if autoApprove {
+	if autoApprove && !wasTainted {
 		discordTitle = "Review auto-approved by AI"
 		discordColor = 1651554 // green
+	} else if autoApprove && wasTainted {
+		discordTitle = "Review pending (user was previously blocked)"
+		discordColor = 16776960 // yellow
 	}
-	discordDesc := fmt.Sprintf("**AI:** %s\n**Review:** %s\nhttps://coursereview.ch/admin", aiVerdict, snippet)
+	discordDesc := fmt.Sprintf("**Review:** %s\nhttps://coursereview.ch/admin", snippet)
 	SendDiscordMessage(discordTitle, discordDesc, discordColor)
 
 	//check if eval id exists in review table
@@ -751,8 +761,8 @@ func reviewChange(c *fiber.Ctx, db *sql.Queries, evalId int32, review string, mo
 		}
 	}
 
-	// Auto-approve if toggle is on and AI approved
-	if autoApprove && modResult.Approved {
+	// Auto-approve if toggle is on, AI approved, and user wasn't previously blocked
+	if autoApprove && modResult.Approved && !wasTainted {
 		_, err = db.VerifyReview(c.Context(), evalId)
 		if err != nil {
 			log.Printf("Auto-approve failed for eval %d: %v", evalId, err)

@@ -8,9 +8,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
-
-	"github.com/gofiber/fiber/v2"
 )
 
 // moderationResult holds the result of an LLM moderation check.
@@ -167,17 +166,8 @@ func parseModerationJSON(text string) moderationResult {
 	return result
 }
 
-// checkModeration runs moderation and returns the result plus a Fiber error response if blocked.
-// Returns (result, nil) if approved, (result, error) if blocked.
-func checkModeration(c *fiber.Ctx, reviewText string) (moderationResult, error) {
-	result := moderateReview(reviewText)
-	if !result.Approved {
-		return result, c.Status(422).JSON(fiber.Map{
-			"error":      "review_blocked",
-			"reason":     result.Reason,
-			"moderation": true,
-		})
-	}
-	return result, nil
-}
+// taintedUsers tracks users who had a review blocked by moderation in this session.
+// If auto-approve is on and a user was previously blocked, their next approved review
+// stays pending for human review (prompt injection risk).
+var taintedUsers sync.Map
 
