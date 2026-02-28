@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strconv"
@@ -131,8 +132,8 @@ func main() {
 		Output: file,
 	}))
 
-	// Redirect default log output to the file
-	log.SetOutput(file)
+	// Log to both stdout and file
+	log.SetOutput(io.MultiWriter(os.Stdout, file))
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	// Open secondary log file
