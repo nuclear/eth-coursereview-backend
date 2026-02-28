@@ -25,5 +25,5 @@ FRONTEND_URL = "http://localhost:5173"
 # LLM moderation via OpenRouter (optional, fail-open if not set)
 LLM_API_KEY = ""
 LLM_BASE_URL = "https://openrouter.ai/api/v1"
-LLM_MODEL = "anthropic/claude-haiku-4-5-20251001"
+LLM_MODEL = "anthropic/claude-haiku-4.5"
 LLM_AUTO_APPROVE = "false"
