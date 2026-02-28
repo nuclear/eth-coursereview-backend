@@ -125,7 +125,9 @@ func moderateWithOpenRouter(apiKey, baseURL, model, reviewText string) moderatio
 		return moderationResult{Approved: true}
 	}
 
-	return parseModerationJSON(chatResp.Choices[0].Message.Content)
+	result := parseModerationJSON(chatResp.Choices[0].Message.Content)
+	log.Printf("Moderation: approved=%v reason=%q", result.Approved, result.Reason)
+	return result
 }
 
 // parseModerationJSON extracts the moderation decision from LLM output.
