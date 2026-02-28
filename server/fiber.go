@@ -802,7 +802,7 @@ func ratingChange(c *fiber.Ctx, db *sql.Queries, evalId int32) error {
 		return c.JSON(fiber.Map{"success": "Set rating"})
 	} else {
 		if newRating.Recommended+newRating.Engaging+newRating.Difficulty+newRating.Effort+newRating.Resources == 0 {
-			return c.Status(500).JSON(fiber.Map{"error": "Ratings cannot be empty"})
+			return c.JSON(fiber.Map{"success": "Ratings unchanged"})
 		}
 		updateRatings := sql.UpdateRatingParams(ratings)
 		_, err := db.UpdateRating(c.Context(), updateRatings)
