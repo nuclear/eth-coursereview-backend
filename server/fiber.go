@@ -709,8 +709,7 @@ func main() {
 		}
 
 		log.Println("Scraping courses for semester:", data.Semester)
-		//vvzScraper("2025S")
-		go vvzScraper(data.Semester, c.Context())
+		go vvzScraper(data.Semester)
 
 		return c.JSON(fiber.Map{"success": "Scraped courses"})
 	})

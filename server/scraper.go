@@ -6,6 +6,7 @@ import (
 	"coursereview/app/generated/sql"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"os"
@@ -75,8 +76,8 @@ func sendScrapingError(err string) {
 	SendDiscordMessage("uh-oh", description, 6428441)
 }
 
-func vvzScraper(semester string, mainContext context.Context) {
-	scrapeContext, cancel := context.WithCancel(mainContext)
+func vvzScraper(semester string) {
+	scrapeContext, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// connect to db
@@ -124,7 +125,7 @@ func routine(semester string, context context.Context, db *sql.Queries) {
 
 		for _, match := range matchesCourseName {
 			if len(match) > 1 {
-				courseNames = append(courseNames, match[1])
+				courseNames = append(courseNames, html.UnescapeString(match[1]))
 			}
 		}
 	})
